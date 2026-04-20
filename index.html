@@ -35,20 +35,14 @@
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(0, 15, 80); 
+  camera.position.set(0, 10, 80); 
   controls.enableDamping = true;
 
-  // 1. HDRI BACKGROUND (ROTATED TO LIFT HORIZON)
+  // 1. HDRI BACKGROUND
   new RGBELoader()
     .setPath('https://threejs.org/examples/textures/equirectangular/')
     .load('venice_sunset_1k.hdr', function (texture) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
-      
-      // THIS LIFTS THE BACKGROUND
-      // Adjust 0.1 to a higher number (like 0.2) to lift the background even more
-      scene.backgroundRotation.x = 0.1; 
-      scene.environmentRotation.x = 0.1;
-
       scene.background = texture;
       scene.environment = texture;
     });
@@ -68,8 +62,8 @@
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   
-  // Back to Zero for simplicity
-  const GROUND_Y = 0; 
+  // MASTER HEIGHT CONTROL - Lowered further to match background horizon
+  const GROUND_Y = -100.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
 
@@ -90,7 +84,7 @@
     const scaleFactor = 75 / size.x;
     truck.scale.setScalar(scaleFactor); 
     
-    // Truck sits exactly on the road at Y=0
+    // Position truck relative to GROUND_Y
     const scaledHeight = size.y * scaleFactor;
     truck.position.set(-center.x, GROUND_Y + (scaledHeight / 2), -center.z); 
     
@@ -124,7 +118,8 @@
 
         if (interior) {
           interior.visible = true;
-          camera.position.set(0, 0.5, 6.5); // Slightly zoomed out
+          // POSITION: Set Z to 6.0 for a more zoomed-out view of the interior
+          camera.position.set(0, 0.5, 6.5); 
           controls.target.set(0, 0.5, 0);
           controls.enableZoom = false; 
           controls.update();
