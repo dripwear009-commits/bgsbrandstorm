@@ -26,37 +26,42 @@
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87CEEB); // Sky Blue
+  scene.background = new THREE.Color(0x87CEEB); // Sky blue fallback
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(15, 8, 15);
+  controls.enableDamping = true;
 
-  // LIGHTING - This light stays with the camera so you can always see
-  const camLight = new THREE.PointLight(0xffffff, 100);
-  camera.add(camLight);
-  scene.add(camera);
+  // LIGHTING
+  scene.add(new THREE.AmbientLight(0xffffff, 2));
+  const sun = new THREE.DirectionalLight(0xffffff, 2);
+  sun.position.set(10, 20, 10);
+  scene.add(sun);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 1);
-  scene.add(ambient);
+  // ROAD WITH TEXTURE
+  const texLoader = new THREE.TextureLoader();
+  const roadTex = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
+  roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
+  roadTex.repeat.set(15, 15);
 
-  // ROAD
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0x222222 })
+    new THREE.MeshStandardMaterial({ 
+      map: roadTex,
+      color: 0x222222 // Darken the image to look like a road
+    })
   );
   road.rotation.x = -Math.PI / 2;
+  road.position.y = 0; 
   scene.add(road);
-
-  // TEST BOX (If you see this but no truck, your file paths are wrong)
-  const testBox = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color: 0x00ff00}));
-  testBox.position.y = 5;
-  scene.add(testBox);
 
   // LOADERS
   const dracoLoader = new DRACOLoader();
@@ -71,18 +76,20 @@
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     
+    // THE FIX: Move truck so the bottom of the bounding box is at Y=0
     obj.position.x = -center.x;
-    obj.position.y = (size.y / 2) - center.y;
+    obj.position.y = (size.y / 2) - center.y; 
     obj.position.z = -center.z;
 
     if (isInterior) {
       obj.scale.setScalar(10 / size.x);
+      obj.rotation.y = 0; 
       obj.visible = false;
     } else {
       obj.scale.setScalar(15 / size.x);
       obj.traverse(child => {
-        if (child.isMesh) {
-          // Fix black overlay
+        if (child.isMesh && child.material) {
+          // Fix for the black overlay text
           child.material.transparent = false;
           child.material.alphaTest = 0.5;
           child.material.depthWrite = true;
@@ -90,25 +97,24 @@
       });
     }
     scene.add(obj);
-    testBox.visible = false; // Hide test box once something loads
   }
 
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
     setupModel(truck, false);
-  }, undefined, (e) => console.error("Truck Error:", e));
+  });
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     setupModel(interior, true);
-  }, undefined, (e) => console.error("Interior Error:", e));
+  });
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
 
   window.addEventListener('click', (event) => {
-    const mouse = new THREE.Vector2(
-      (event.clientX / window.innerWidth) * 2 - 1,
-      -(event.clientY / window.innerHeight) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     if (truck && truck.visible) {
@@ -116,14 +122,19 @@
       if (intersects.length > 0) {
         truck.visible = false;
         road.visible = false;
-        scene.background = new THREE.Color(0x000000);
+        scene.background = new THREE.Color(0x050505); 
+        renderer.toneMappingExposure = 2.5; 
+
         if (interior) {
           interior.visible = true;
-          // Downwards and Backwards as requested
-          camera.position.set(0, 0.01, 8.5); 
-          controls.target.set(0, 0, 0);
-          controls.enableZoom = false;
+          // Positioned slightly lower and further back as requested
+          camera.position.set(0, 0.01, 7.5); 
+          controls.target.set(0, 0.01, 0); 
+          controls.enableZoom = false; 
+          controls.enablePan = false;
+          camera.updateProjectionMatrix();
         }
+        controls.update();
       }
     }
   });
