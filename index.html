@@ -28,25 +28,24 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xeeeeee);
 
+  // Near plane at 0.01 is vital for interior views so the dashboard doesn't disappear
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
   
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.5; 
+  renderer.toneMappingExposure = 1.8; 
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(8, 5, 10);
+  camera.position.set(10, 5, 10);
   controls.enableDamping = true;
-  controls.update();
 
-  // BRIGHTER LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 2)); 
-  const sun = new THREE.DirectionalLight(0xffffff, 2);
-  sun.position.set(5, 10, 5);
-  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xffffff, 2.5)); 
+  const light = new THREE.DirectionalLight(0xffffff, 2);
+  light.position.set(5, 10, 5);
+  scene.add(light);
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -56,25 +55,30 @@
 
   let truck, interior;
 
-  // Function to center a model if it's "floating" far from 0,0,0
-  function centerModel(obj) {
+  // Center helper
+  function setupModel(obj, isInterior = false) {
     const box = new THREE.Box3().setFromObject(obj);
     const center = box.getCenter(new THREE.Vector3());
     obj.position.sub(center); 
+    
+    if (isInterior) {
+      // Flip the interior 180 degrees in case it's facing the wrong way
+      obj.rotation.y = Math.PI; 
+    }
   }
 
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
-    centerModel(truck);
+    setupModel(truck);
     scene.add(truck);
   });
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
-    centerModel(interior);
+    setupModel(interior, true);
     interior.visible = false;
     scene.add(interior);
-  }, undefined, (e) => console.error("Interior error:", e));
+  });
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -87,19 +91,19 @@
     if (truck && truck.visible) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
-        // 1. Hide truck, show interior
         truck.visible = false;
+        
         if (interior) {
           interior.visible = true;
           
-          // 2. ZOOM IN: Move camera very close to the center
-          // Adjust these numbers if you are still "too far"
-          camera.position.set(0, 0.5, 1); 
-          controls.target.set(0, 0, 0); 
+          // EXTREME ZOOM: 
+          // We put the camera slightly in front of the center (0.1) 
+          // and look slightly forward (0.5)
+          camera.position.set(0, 0, 0.1); 
+          controls.target.set(0, 0, 0.5); 
           
-          // 3. Prevent camera from clipping through small models
-          camera.near = 0.01;
-          camera.updateProjectionMatrix();
+          // Allow the user to look around from a fixed point
+          controls.enablePan = false; 
         }
         controls.update();
       }
