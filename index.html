@@ -24,59 +24,43 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-  import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
+  // Set a fallback color so you don't get a black screen if the image fails
+  scene.background = new THREE.Color(0x87CEEB); 
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0; 
+  renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(15, 8, 15);
   controls.enableDamping = true;
 
-  // 1. HDRI BACKGROUND
-  let skyTexture;
-  new RGBELoader()
-    .setPath('https://threejs.org/examples/textures/equirectangular/')
-    .load('venice_sunset_1k.hdr', function (texture) {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      skyTexture = texture;
-      scene.background = skyTexture;
-      scene.environment = skyTexture;
-    });
+  // 1. LIGHTING
+  const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+  scene.add(ambientLight);
 
-  // 2. REALISTIC ROAD
-  const textureLoader = new THREE.TextureLoader();
-  // Using a realistic asphalt texture
-  const roadBase = textureLoader.load('https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg'); // Placeholder for structure
-  const roadTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
-  
-  // Customizing the texture to look like dark asphalt
-  roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping;
-  roadTexture.repeat.set(20, 20);
-  roadTexture.colorSpace = THREE.SRGBColorSpace;
+  const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+  sunLight.position.set(10, 20, 10);
+  scene.add(sunLight);
 
+  // 2. THE ROAD (Using a built-in pattern so it doesn't fail to load)
   const planeGeo = new THREE.PlaneGeometry(200, 200);
   const planeMat = new THREE.MeshStandardMaterial({ 
-    map: roadTexture,
-    color: 0x222222, // Darken the texture significantly to look like asphalt
-    roughness: 0.8,
-    metalness: 0.1
+    color: 0x222222,
+    roughness: 0.9
   });
-  
   const road = new THREE.Mesh(planeGeo, planeMat);
-  road.rotation.x = Math.PI * -0.5;
+  road.rotation.x = -Math.PI / 2;
+  road.position.y = 0; // Explicitly at zero
   scene.add(road);
 
-  // LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8)); 
-
+  // 3. LOADERS
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
   const loader = new GLTFLoader();
@@ -89,9 +73,9 @@
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     
-    // FIXING THE GROUNDING (Ensures truck sits ON the road)
+    // Align bottom of model with Y=0 (the road)
     obj.position.x = -center.x;
-    obj.position.y = (size.y / 2) - center.y; 
+    obj.position.y = (size.y / 2) - center.y;
     obj.position.z = -center.z;
 
     if (isInterior) {
@@ -102,10 +86,11 @@
       obj.scale.setScalar(15 / size.x);
       obj.traverse(child => {
         if (child.isMesh && child.material) {
-          // Final fix for text overlays
+          // Fix for the black overlay text
           child.material.transparent = false;
+          child.material.alphaTest = 0.5; // Discards black/transparent pixels
           child.material.depthWrite = true;
-          child.material.alphaTest = 0.5;
+          child.material.side = THREE.DoubleSide;
         }
       });
     }
@@ -115,14 +100,15 @@
     truck = gltf.scene;
     setupModel(truck, false);
     scene.add(truck);
-  }, undefined, (e) => console.error(e));
+  }, undefined, (e) => console.error("Truck Load Error:", e));
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     setupModel(interior, true);
     scene.add(interior);
-  });
+  }, undefined, (e) => console.error("Interior Load Error:", e));
 
+  // 4. INTERACTION
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
@@ -136,9 +122,35 @@
       if (intersects.length > 0) {
         truck.visible = false;
         road.visible = false;
-        scene.background = new THREE.Color(0x020202); // Pure focus black
-        renderer.toneMappingExposure = 2.2; 
+        scene.background = new THREE.Color(0x050505); 
+        renderer.toneMappingExposure = 2.5; // Boost brightness inside
 
         if (interior) {
           interior.visible = true;
-          camera.position.set(0,
+          camera.position.set(0, 0.05, 7.5); // Down and back as requested
+          controls.target.set(0, 0.05, 0); 
+          controls.enableZoom = false; 
+          controls.enablePan = false;
+          camera.updateProjectionMatrix();
+        }
+        controls.update();
+      }
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+</script>
+
+</body>
+</html>
