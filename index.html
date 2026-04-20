@@ -24,28 +24,35 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+  import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xeeeeee);
+  scene.background = new THREE.Color(0xcccccc);
 
-  // Near plane at 0.01 is vital for interior views so the dashboard doesn't disappear
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
   
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // COLOR AND LIGHT FIXES
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.8; 
+  renderer.toneMapping = THREE.ReinhardToneMapping; // Better for bright interiors
+  renderer.toneMappingExposure = 2.5; // High exposure to fight the darkness
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(10, 5, 10);
+  camera.position.set(12, 6, 12);
   controls.enableDamping = true;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 2.5)); 
-  const light = new THREE.DirectionalLight(0xffffff, 2);
-  light.position.set(5, 10, 5);
-  scene.add(light);
+  // Add high-intensity lights from multiple angles
+  scene.add(new THREE.AmbientLight(0xffffff, 3)); 
+  const topLight = new THREE.DirectionalLight(0xffffff, 4);
+  topLight.position.set(5, 20, 5);
+  scene.add(topLight);
+
+  // Environment Map (Simulates sky/room reflections)
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -55,21 +62,29 @@
 
   let truck, interior;
 
-  // Center helper
+  // Improved centering and scaling
   function setupModel(obj, isInterior = false) {
     const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    obj.position.sub(center); 
     
+    obj.position.sub(center); 
+
     if (isInterior) {
-      // Flip the interior 180 degrees in case it's facing the wrong way
-      obj.rotation.y = Math.PI; 
+      // Force the interior to be a specific size so it's not "tiny"
+      const scaleFactor = 10 / size.x; 
+      obj.scale.setScalar(scaleFactor);
+      obj.rotation.y = Math.PI; // Keeps the flip you needed
+    } else {
+      // Scale truck to a standard size
+      const scaleFactor = 15 / size.x;
+      obj.scale.setScalar(scaleFactor);
     }
   }
 
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
-    setupModel(truck);
+    setupModel(truck, false);
     scene.add(truck);
   });
 
@@ -92,18 +107,14 @@
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
         truck.visible = false;
-        
         if (interior) {
           interior.visible = true;
           
-          // EXTREME ZOOM: 
-          // We put the camera slightly in front of the center (0.1) 
-          // and look slightly forward (0.5)
-          camera.position.set(0, 0, 0.1); 
-          controls.target.set(0, 0, 0.5); 
-          
-          // Allow the user to look around from a fixed point
-          controls.enablePan = false; 
+          // Move camera to a specific "Driver Eye" position
+          // If you see black, it means you are inside a seat—scroll out!
+          camera.position.set(0, 1, 0); 
+          controls.target.set(0, 1, 5); 
+          camera.updateProjectionMatrix();
         }
         controls.update();
       }
