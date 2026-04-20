@@ -34,7 +34,7 @@
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(0, 10, 60); 
+  camera.position.set(0, 10, 80); 
   controls.enableDamping = true;
 
   // 1. HDRI BACKGROUND
@@ -46,22 +46,23 @@
       scene.environment = texture;
     });
 
-  // 2. THE ROAD (Using your local asphalt.jpg)
+  // 2. THE ROAD (Using asphalt.jpg)
   const texLoader = new THREE.TextureLoader();
   const roadTex = texLoader.load('asphalt.jpg', (txt) => {
       txt.wrapS = txt.wrapT = THREE.RepeatWrapping;
-      txt.repeat.set(150, 150); 
+      txt.repeat.set(200, 200); 
   });
 
   const roadGeo = new THREE.PlaneGeometry(5000, 5000);
   const roadMat = new THREE.MeshStandardMaterial({ 
     map: roadTex, 
-    color: 0x555555 // Tints image slightly darker
+    color: 0x444444 
   });
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   
-  // GROUND_Y is the master control for the scene height relative to the BG
+  // MASTER HEIGHT CONTROL
+  // If the scene looks "high" against the sunset, make this more negative (-35, -40, etc.)
   const GROUND_Y = -25.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
@@ -81,8 +82,19 @@
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
 
-    truck.scale.setScalar(70 / size.x); // Even bigger truck
-    truck.position.set(-center.x, GROUND_Y, -center.z); 
+    // Scale truck
+    truck.scale.setScalar(75 / size.x); 
+    
+    // POSITION FIX: 
+    // We place the truck at GROUND_Y + (height / 2) so the bottom sits ON the road.
+    // If it still passes through, the model origin might be at the bottom; 
+    // in that case, simply use truck.position.y = GROUND_Y;
+    const scaledHeight = (size.y * (75 / size.x));
+    truck.position.set(-center.x, GROUND_Y + (scaledHeight / 2), -center.z); 
+    
+    // Alternative if tires are floating:
+    // truck.position.y = GROUND_Y;
+
     scene.add(truck);
   });
 
@@ -91,15 +103,12 @@
     interior = gltf.scene;
     const box = new THREE.Box3().setFromObject(interior);
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    
-    interior.scale.setScalar(12 / size.x); // Slightly larger interior
-    interior.position.set(-center.x, 0, -center.z);
+    interior.scale.setScalar(12 / size.x);
     interior.visible = false;
     scene.add(interior);
   });
 
-  // 4. INTERACTION
+  // 4. CLICK HANDLER
   window.addEventListener('mousedown', (event) => {
     const mouse = new THREE.Vector2(
       (event.clientX / window.innerWidth) * 2 - 1,
@@ -117,10 +126,9 @@
 
         if (interior) {
           interior.visible = true;
-          // POSITION: 4.5 is a "slight zoom out" from the dashboard
-          camera.position.set(0, 0.8, 4.5); 
+          camera.position.set(0, 0.8, 5); // Fixed slightly zoomed-out interior view
           controls.target.set(0, 0.8, 0);
-          controls.enableZoom = false; // Zoom locked
+          controls.enableZoom = false; 
           controls.update();
         }
       }
