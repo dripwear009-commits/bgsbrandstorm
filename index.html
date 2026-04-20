@@ -55,8 +55,7 @@
   const texLoader = new THREE.TextureLoader();
   // Using a realistic asphalt texture
   const asphaltTexture = texLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/grasslight-big.jpg'); 
-  // Note: Since I can't provide a local file, I'm using a Three.js sample. 
-  // To make it look like asphalt, we tint it very dark.
+
   
   asphaltTexture.wrapS = THREE.RepeatWrapping;
   asphaltTexture.wrapT = THREE.RepeatWrapping;
@@ -73,7 +72,7 @@
   
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
-  road.position.y = -2.5; // Manually lowered to match tires
+  road.position.y = -5; // Manually lowered to match tires
   scene.add(road);
 
   // HDRI
