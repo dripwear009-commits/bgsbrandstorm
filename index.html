@@ -31,6 +31,7 @@
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -61,9 +62,8 @@
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   
-  // MASTER HEIGHT CONTROL
-  // If the scene looks "high" against the sunset, make this more negative (-35, -40, etc.)
-  const GROUND_Y = -25.0; 
+  // MASTER HEIGHT CONTROL - Lowered further to match background horizon
+  const GROUND_Y = -40.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
 
@@ -75,30 +75,22 @@
 
   let truck, interior;
 
-  // TRUCK LOAD
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
     const box = new THREE.Box3().setFromObject(truck);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
 
-    // Scale truck
-    truck.scale.setScalar(75 / size.x); 
+    const scaleFactor = 75 / size.x;
+    truck.scale.setScalar(scaleFactor); 
     
-    // POSITION FIX: 
-    // We place the truck at GROUND_Y + (height / 2) so the bottom sits ON the road.
-    // If it still passes through, the model origin might be at the bottom; 
-    // in that case, simply use truck.position.y = GROUND_Y;
-    const scaledHeight = (size.y * (75 / size.x));
+    // Position truck relative to GROUND_Y
+    const scaledHeight = size.y * scaleFactor;
     truck.position.set(-center.x, GROUND_Y + (scaledHeight / 2), -center.z); 
     
-    // Alternative if tires are floating:
-    // truck.position.y = GROUND_Y;
-
     scene.add(truck);
   });
 
-  // INTERIOR LOAD
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     const box = new THREE.Box3().setFromObject(interior);
@@ -108,7 +100,7 @@
     scene.add(interior);
   });
 
-  // 4. CLICK HANDLER
+  // 4. INTERACTION
   window.addEventListener('mousedown', (event) => {
     const mouse = new THREE.Vector2(
       (event.clientX / window.innerWidth) * 2 - 1,
@@ -126,7 +118,8 @@
 
         if (interior) {
           interior.visible = true;
-          camera.position.set(0, 0.8, 5); // Fixed slightly zoomed-out interior view
+          // POSITION: Set Z to 6.0 for a more zoomed-out view of the interior
+          camera.position.set(0, 0.8, 6.0); 
           controls.target.set(0, 0.8, 0);
           controls.enableZoom = false; 
           controls.update();
