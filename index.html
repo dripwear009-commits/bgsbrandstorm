@@ -28,31 +28,25 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xeeeeee);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
   
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  
-  // FIX DARKNESS: Set color space and tone mapping
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2; // Increase this if it's still too dark
-  
+  renderer.toneMappingExposure = 1.5; 
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(5, 3, 8);
+  camera.position.set(8, 5, 10);
+  controls.enableDamping = true;
   controls.update();
 
-  // LIGHTING FIX
-  // 1. Ambient Light: Brightens everything equally so nothing is pitch black
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); 
-  scene.add(ambientLight);
-
-  // 2. Directional Light: Acts like the sun to show form and highlights
-  const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
-  sunLight.position.set(5, 10, 7.5);
-  scene.add(sunLight);
+  // BRIGHTER LIGHTING
+  scene.add(new THREE.AmbientLight(0xffffff, 2)); 
+  const sun = new THREE.DirectionalLight(0xffffff, 2);
+  sun.position.set(5, 10, 5);
+  scene.add(sun);
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -62,16 +56,25 @@
 
   let truck, interior;
 
+  // Function to center a model if it's "floating" far from 0,0,0
+  function centerModel(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    const center = box.getCenter(new THREE.Vector3());
+    obj.position.sub(center); 
+  }
+
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
+    centerModel(truck);
     scene.add(truck);
   });
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
+    centerModel(interior);
     interior.visible = false;
     scene.add(interior);
-  });
+  }, undefined, (e) => console.error("Interior error:", e));
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -81,17 +84,22 @@
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    if (truck) {
+    if (truck && truck.visible) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
-        // FIX OVERLAP: Hide the exterior truck when looking at the interior
-        truck.visible = false; 
-        
+        // 1. Hide truck, show interior
+        truck.visible = false;
         if (interior) {
           interior.visible = true;
-          // Position the camera exactly where your interior model sits
-          camera.position.set(0, 1.5, 0.5); 
-          controls.target.set(0, 1.5, 2); 
+          
+          // 2. ZOOM IN: Move camera very close to the center
+          // Adjust these numbers if you are still "too far"
+          camera.position.set(0, 0.5, 1); 
+          controls.target.set(0, 0, 0); 
+          
+          // 3. Prevent camera from clipping through small models
+          camera.near = 0.01;
+          camera.updateProjectionMatrix();
         }
         controls.update();
       }
