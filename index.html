@@ -27,137 +27,108 @@
   import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
-  
-  // FOG: This is the secret to an infinite floor. It fades the floor into the sky.
-  scene.fog = new THREE.FogExp2(0x87ceeb, 0.005); 
-  scene.background = new THREE.Color(0x87ceeb); 
 
-  // Camera Far increased to 5000 so the floor doesn't cut off
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+  // 1. CAMERA & RENDERER (Far plane set to 10000 for infinite view)
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true; // IMPORTANT FOR REALISM
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(20, 12, 25);
+  camera.position.set(20, 10, 20);
   controls.enableDamping = true;
-  controls.maxDistance = 100; // Prevents user from zooming out too far and seeing the edge
 
-  // LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.set(50, 100, 50);
-  scene.add(sun);
-
-  // 1. INFINITE ASPHALT FLOOR WITH TEXTURE
-  const texLoader = new THREE.TextureLoader();
-  // Using a realistic asphalt texture
-  const asphaltTexture = texLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/grasslight-big.jpg'); 
-
-  
-  asphaltTexture.wrapS = THREE.RepeatWrapping;
-  asphaltTexture.wrapT = THREE.RepeatWrapping;
-  asphaltTexture.repeat.set(200, 200); // High repeat for realistic scale
-  asphaltTexture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Keeps texture sharp at a distance
-
-  const roadGeo = new THREE.PlaneGeometry(2000, 2000); // Massive plane
-  const roadMat = new THREE.MeshStandardMaterial({ 
-    map: asphaltTexture, 
-    color: 0x111111, // Tints the texture to a dark asphalt charcoal
-    roughness: 0.9,
-    metalness: 0.1
-  });
-  
-  const road = new THREE.Mesh(roadGeo, roadMat);
-  road.rotation.x = -Math.PI / 2;
-  road.position.y = -2.5; // Manually lowered to match tires
-  scene.add(road);
-
-  // HDRI
+  // 2. RESTORE CITY ENVIRONMENT (HDRI)
   new RGBELoader()
     .setPath('https://threejs.org/examples/textures/equirectangular/')
     .load('venice_sunset_1k.hdr', function (texture) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.background = texture;
       scene.environment = texture;
-      // We keep the solid sky color for the fog to blend correctly
     });
 
+  // 3. ASPHALT ROAD (Infinite and Textured)
+  const texLoader = new THREE.TextureLoader();
+  // Using a detailed asphalt-like texture
+  const roadBase = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
+  roadBase.wrapS = roadBase.wrapT = THREE.RepeatWrapping;
+  roadBase.repeat.set(200, 200); 
+  roadBase.anisotropy = 16;
+
+  const roadGeo = new THREE.PlaneGeometry(5000, 5000); 
+  const roadMat = new THREE.MeshStandardMaterial({ 
+    map: roadBase, 
+    color: 0x151515, // Darken the texture to look like asphalt
+    roughness: 0.8
+  });
+  
+  const road = new THREE.Mesh(roadGeo, roadMat);
+  road.rotation.x = -Math.PI / 2;
+  
+  // ADJUST FLOOR LEVEL MANUALLY HERE
+  road.position.y = -3; 
+  
+  road.receiveShadow = true; // Allow truck to cast shadow on road
+  scene.add(road);
+
+  // 4. LIGHTING
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(20, 50, 20);
+  sun.castShadow = true;
+  // Shadow camera setup for large areas
+  sun.shadow.camera.left = -50;
+  sun.shadow.camera.right = 50;
+  sun.shadow.camera.top = 50;
+  sun.shadow.camera.bottom = -50;
+  scene.add(sun);
+
+  // 5. LOADERS
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
   const loader = new GLTFLoader();
   loader.setDRACOLoader(dracoLoader);
 
-  let truck, interior;
-
-  function setupModel(obj, isInterior = false) {
-    const box = new THREE.Box3().setFromObject(obj);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    
-    obj.position.x = -center.x;
-    obj.position.z = -center.z;
-
-    if (isInterior) {
-      obj.position.y = (size.y / 2) - center.y; 
-      obj.scale.setScalar(10 / size.x);
-      obj.visible = false;
-    } else {
-      obj.position.y = 0; 
-      obj.scale.setScalar(15 / size.x);
-    }
-  }
-
+  let truck;
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
-    setupModel(truck, false);
+    
+    // Position Truck
+    const box = new THREE.Box3().setFromObject(truck);
+    const center = box.getCenter(new THREE.Vector3());
+    truck.position.x = -center.x;
+    truck.position.z = -center.z;
+    truck.position.y = 0; 
+
+    truck.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true; 
+        child.receiveShadow = true;
+      }
+    });
+    
     scene.add(truck);
   });
 
-  loader.load('./interior.glb', (gltf) => {
-    interior = gltf.scene;
-    setupModel(interior, true);
-    scene.add(interior);
-  });
-
-  window.addEventListener('click', (event) => {
-    const mouse = new THREE.Vector2(
-      (event.clientX / window.innerWidth) * 2 - 1,
-      -(event.clientY / window.innerHeight) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-
-    if (truck && truck.visible) {
-      const intersects = raycaster.intersectObject(truck, true);
-      if (intersects.length > 0) {
-        truck.visible = false;
-        road.visible = false;
-        scene.fog = null; // Remove fog for interior view
-        scene.background = new THREE.Color(0x050505); 
-        if (interior) {
-          interior.visible = true;
-          camera.position.set(0, 0.5, 5); 
-          controls.target.set(0, 0.5, 0); 
-          controls.update();
-        }
-      }
-    }
-  });
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
+  // ANIMATION
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
   }
   animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
 </script>
 
 </body>
