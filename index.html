@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Truck Exam Center</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js';
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+camera.position.set(5, 3, 8);
+
+const light = new THREE.HemisphereLight(0xffffff, 0x444444);
+scene.add(light);
+
+const loader = new GLTFLoader();
+
+let truck, interior;
+
+// Load truck
+loader.load('truck.glb', (gltf) => {
+  truck = gltf.scene;
+  scene.add(truck);
+});
+
+// Load interior (hidden initially)
+loader.load('interior.glb', (gltf) => {
+  interior = gltf.scene;
+  interior.visible = false;
+  scene.add(interior);
+});
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// CLICK EVENT
+window.addEventListener('click', (event) => {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  if (truck) {
+    const intersects = raycaster.intersectObject(truck, true);
+
+    if (intersects.length > 0) {
+      // SHOW INTERIOR
+      interior.visible = true;
+
+      // MOVE CAMERA INSIDE
+      camera.position.set(0, 2, 2);
+      controls.target.set(0, 1, 0);
+    }
+  }
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+
+</body>
+</html>
