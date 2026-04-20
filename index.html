@@ -39,13 +39,14 @@
   controls.enableDamping = true;
 
   // 1. HDRI BACKGROUND
-  new RGBELoader()
-    .setPath('https://threejs.org/examples/textures/equirectangular/')
-    .load('venice_sunset_1k.hdr', function (texture) {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      scene.background = texture;
-      scene.environment = texture;
-    });
+  // 1. UPDATED HDRI BACKGROUND (City Plaza, no water)
+new RGBELoader()
+  .setPath('https://threejs.org/examples/textures/equirectangular/')
+  .load('royal_esplanade_1k.hdr', function (texture) {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = texture;
+    scene.environment = texture;
+  });
 
   // 2. THE ROAD (Using asphalt.jpg)
   const texLoader = new THREE.TextureLoader();
@@ -63,7 +64,7 @@
   road.rotation.x = -Math.PI / 2;
   
   // MASTER HEIGHT CONTROL - Lowered further to match background horizon
-  const GROUND_Y = -100.0; 
+  const GROUND_Y = -10.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
 
