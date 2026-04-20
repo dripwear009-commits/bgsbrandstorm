@@ -41,11 +41,11 @@
   // 1. HDRI BACKGROUND
   // 1. UPDATED HDRI BACKGROUND (City Plaza, no water)
 new RGBELoader()
-  .setPath('https://threejs.org/examples/textures/equirectangular/')
-  .load('royal_esplanade_1k.hdr', function (texture) {
-    texture.mapping = THREE.EquirectangularReflectionMapping;
-    scene.background = texture;
-    scene.environment = texture;
+    .setPath('https://threejs.org/examples/textures/equirectangular/')
+    .load('pedestrian_overpass_1k.hdr', function (texture) {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.background = texture;
+      scene.environment = texture;
   });
 
   // 2. THE ROAD (Using asphalt.jpg)
@@ -64,7 +64,7 @@ new RGBELoader()
   road.rotation.x = -Math.PI / 2;
   
   // MASTER HEIGHT CONTROL - Lowered further to match background horizon
-  const GROUND_Y = -10.0; 
+  const GROUND_Y = -20.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
 
