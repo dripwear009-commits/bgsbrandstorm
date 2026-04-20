@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Truck Exam Center</title>
   <style>
-    body { margin: 0; overflow: hidden; background-color: #eeeeee; }
+    body { margin: 0; overflow: hidden; background-color: #000; }
   </style>
 </head>
 <body>
@@ -24,32 +24,51 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+  import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xcccccc);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-  
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ReinhardToneMapping; 
-  renderer.toneMappingExposure = 2.2; 
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0; 
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(12, 6, 12);
+  camera.position.set(15, 8, 15);
   controls.enableDamping = true;
 
-  // LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 3.5)); 
-  const topLight = new THREE.DirectionalLight(0xffffff, 2);
-  topLight.position.set(5, 20, 5);
-  scene.add(topLight);
+  // 1. NATURAL BACKGROUND (HDRI)
+  let skyTexture;
+  new RGBELoader()
+    .setPath('https://threejs.org/examples/textures/equirectangular/')
+    .load('venice_sunset_1k.hdr', function (texture) {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      skyTexture = texture;
+      scene.background = skyTexture;
+      scene.environment = skyTexture;
+    });
+
+  // 2. CONCRETE ROAD
+  const planeSize = 100;
+  const loader_tex = new THREE.TextureLoader();
+  const concreteTex = loader_tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
+  concreteTex.wrapS = THREE.RepeatWrapping;
+  concreteTex.wrapT = THREE.RepeatWrapping;
+  concreteTex.repeat.set(10, 10);
+
+  const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+  const planeMat = new THREE.MeshStandardMaterial({ color: 0x333333 }); // Dark concrete
+  const road = new THREE.Mesh(planeGeo, planeMat);
+  road.rotation.x = Math.PI * -0.5;
+  scene.add(road);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5)); 
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
-
   const loader = new GLTFLoader();
   loader.setDRACOLoader(dracoLoader);
 
@@ -59,23 +78,22 @@
     const box = new THREE.Box3().setFromObject(obj);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    obj.position.sub(center); 
+    
+    obj.position.x = -center.x;
+    obj.position.y = (size.y / 2) - center.y; 
+    obj.position.z = -center.z;
 
     if (isInterior) {
-      const scaleFactor = 10 / size.x; 
-      obj.scale.setScalar(scaleFactor);
-      obj.rotation.y = Math.PI; 
+      obj.scale.setScalar(10 / size.x);
+      obj.rotation.y = 0; 
+      obj.visible = false;
     } else {
-      const scaleFactor = 15 / size.x;
-      obj.scale.setScalar(scaleFactor);
-
-      // FIX FOR BLACK OVERLAY ON TEXT/DECALS
+      obj.scale.setScalar(15 / size.x);
       obj.traverse(child => {
         if (child.isMesh && child.material) {
-          // If the material has transparency, we stop it from "blocking" the truck body
-          if (child.material.transparent || child.material.alphaTest > 0) {
-            child.material.depthWrite = false;
-          }
+          child.material.transparent = false;
+          child.material.alphaTest = 0.5;
+          child.material.depthWrite = true;
         }
       });
     }
@@ -90,7 +108,6 @@
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     setupModel(interior, true);
-    interior.visible = false;
     scene.add(interior);
   });
 
@@ -105,19 +122,21 @@
     if (truck && truck.visible) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
+        // --- TRANSITION TO INTERIOR ---
         truck.visible = false;
+        road.visible = false;
+        
+        // Switch to a clean, dark "Studio" background
+        scene.background = new THREE.Color(0x050505); 
+        renderer.toneMappingExposure = 2.0; // Boost light inside
+
         if (interior) {
           interior.visible = true;
-
-          // POSITION ADJUSTMENTS
-          // Y = 0.5 (Further down)
-          // Z = 5.5 (Further back/more zoom out)
-          camera.position.set(0, 0.5, 5.5); 
-          controls.target.set(0, 0.5, 0); 
-          
+          // POSITION: Lower (Y=0.1) and Further Back (Z=7.0)
+          camera.position.set(0, 0.1, 7.0); 
+          controls.target.set(0, 0.1, 0); 
           controls.enableZoom = false; 
           controls.enablePan = false;
-          
           camera.updateProjectionMatrix();
         }
         controls.update();
