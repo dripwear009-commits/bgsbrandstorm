@@ -24,7 +24,6 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-  import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xcccccc);
@@ -33,26 +32,26 @@
   
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  
-  // COLOR AND LIGHT FIXES
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ReinhardToneMapping; // Better for bright interiors
-  renderer.toneMappingExposure = 2.5; // High exposure to fight the darkness
+  renderer.toneMapping = THREE.ReinhardToneMapping; 
+  renderer.toneMappingExposure = 2.5; // High exposure for interior clarity
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(12, 6, 12);
   controls.enableDamping = true;
 
-  // Add high-intensity lights from multiple angles
+  // GLOBAL LIGHTING
   scene.add(new THREE.AmbientLight(0xffffff, 3)); 
-  const topLight = new THREE.DirectionalLight(0xffffff, 4);
-  topLight.position.set(5, 20, 5);
-  scene.add(topLight);
+  const sun = new THREE.DirectionalLight(0xffffff, 3);
+  sun.position.set(5, 20, 5);
+  scene.add(sun);
 
-  // Environment Map (Simulates sky/room reflections)
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
+  // CAB INTERNAL LIGHT (Fixes the interior darkness)
+  const cabLight = new THREE.PointLight(0xffffff, 50, 10);
+  cabLight.position.set(0, 2, 0);
+  cabLight.visible = false; // Only turn on when inside
+  scene.add(cabLight);
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -62,21 +61,17 @@
 
   let truck, interior;
 
-  // Improved centering and scaling
   function setupModel(obj, isInterior = false) {
     const box = new THREE.Box3().setFromObject(obj);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    
     obj.position.sub(center); 
 
     if (isInterior) {
-      // Force the interior to be a specific size so it's not "tiny"
       const scaleFactor = 10 / size.x; 
       obj.scale.setScalar(scaleFactor);
-      obj.rotation.y = Math.PI; // Keeps the flip you needed
+      obj.rotation.y = Math.PI; 
     } else {
-      // Scale truck to a standard size
       const scaleFactor = 15 / size.x;
       obj.scale.setScalar(scaleFactor);
     }
@@ -109,11 +104,17 @@
         truck.visible = false;
         if (interior) {
           interior.visible = true;
+          cabLight.visible = true; // Light up the inside
+
+          // NEW ZOOM SETTINGS:
+          // Moved Z back to 1.5 (less zoomed in)
+          camera.position.set(0, 1, 1.5); 
+          controls.target.set(0, 1, 0); 
           
-          // Move camera to a specific "Driver Eye" position
-          // If you see black, it means you are inside a seat—scroll out!
-          camera.position.set(0, 1, 0); 
-          controls.target.set(0, 1, 5); 
+          // DISABLE ZOOM & PAN
+          controls.enableZoom = false; 
+          controls.enablePan = false;
+          
           camera.updateProjectionMatrix();
         }
         controls.update();
