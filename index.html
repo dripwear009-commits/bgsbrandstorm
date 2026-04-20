@@ -50,19 +50,22 @@ new RGBELoader()
 
   // 2. THE ROAD (Using asphalt.jpg)
   const texLoader = new THREE.TextureLoader();
-  const roadTex = texLoader.load('asphalt.jpg', (txt) => {
-      txt.wrapS = txt.wrapT = THREE.RepeatWrapping;
-      txt.repeat.set(200, 200); 
+  const roadTex = texLoader.load('asphalt.jpg', (t) => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(200, 200);
   });
 
-  const roadGeo = new THREE.PlaneGeometry(5000, 5000);
   const roadMat = new THREE.MeshStandardMaterial({ 
     map: roadTex, 
-    color: 0x444444 
+    color: 0x999999, // Changed from 0x555555 to make it lighter grey
+    roughness: 0.8    // Keeps it from looking too "shiny" when lightened
   });
-  const road = new THREE.Mesh(roadGeo, roadMat);
+
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), roadMat);
   road.rotation.x = -Math.PI / 2;
-  
+  const GROUND_Y = -18.0; 
+  road.position.y = GROUND_Y;
+  scene.add(road);
   // MASTER HEIGHT CONTROL - Lowered further to match background horizon
   const GROUND_Y = -20.0; 
   road.position.y = GROUND_Y;
