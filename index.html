@@ -33,25 +33,22 @@
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ReinhardToneMapping; 
-  renderer.toneMappingExposure = 2.5; // High exposure for interior clarity
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+  renderer.toneMappingExposure = 1.2; 
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(12, 6, 12);
   controls.enableDamping = true;
 
-  // GLOBAL LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 3)); 
-  const sun = new THREE.DirectionalLight(0xffffff, 3);
-  sun.position.set(5, 20, 5);
-  scene.add(sun);
+  // EVEN AMBIENT LIGHT
+  const ambient = new THREE.AmbientLight(0xffffff, 2.5);
+  scene.add(ambient);
 
-  // CAB INTERNAL LIGHT (Fixes the interior darkness)
-  const cabLight = new THREE.PointLight(0xffffff, 50, 10);
-  cabLight.position.set(0, 2, 0);
-  cabLight.visible = false; // Only turn on when inside
-  scene.add(cabLight);
+  // SOFT OVERHEAD LIGHT
+  const topLight = new THREE.DirectionalLight(0xffffff, 2);
+  topLight.position.set(0, 10, 0);
+  scene.add(topLight);
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -68,9 +65,17 @@
     obj.position.sub(center); 
 
     if (isInterior) {
-      const scaleFactor = 10 / size.x; 
+      // Adjusted scale slightly for better fit
+      const scaleFactor = 8 / size.x; 
       obj.scale.setScalar(scaleFactor);
       obj.rotation.y = Math.PI; 
+      
+      // Force materials to be double-sided to prevent "black holes" in the mesh
+      obj.traverse(child => {
+        if (child.isMesh) {
+          child.material.side = THREE.DoubleSide;
+        }
+      });
     } else {
       const scaleFactor = 15 / size.x;
       obj.scale.setScalar(scaleFactor);
@@ -104,14 +109,12 @@
         truck.visible = false;
         if (interior) {
           interior.visible = true;
-          cabLight.visible = true; // Light up the inside
 
-          // NEW ZOOM SETTINGS:
-          // Moved Z back to 1.5 (less zoomed in)
-          camera.position.set(0, 1, 1.5); 
+          // ZOOM FIX: 
+          // Set Z to 3.5 (moved back significantly)
+          camera.position.set(0, 1.5, 3.5); 
           controls.target.set(0, 1, 0); 
           
-          // DISABLE ZOOM & PAN
           controls.enableZoom = false; 
           controls.enablePan = false;
           
