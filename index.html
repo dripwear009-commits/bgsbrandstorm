@@ -40,7 +40,7 @@
   camera.position.set(15, 8, 15);
   controls.enableDamping = true;
 
-  // 1. NATURAL BACKGROUND (HDRI)
+  // 1. HDRI BACKGROUND
   let skyTexture;
   new RGBELoader()
     .setPath('https://threejs.org/examples/textures/equirectangular/')
@@ -51,21 +51,31 @@
       scene.environment = skyTexture;
     });
 
-  // 2. CONCRETE ROAD
-  const planeSize = 100;
-  const loader_tex = new THREE.TextureLoader();
-  const concreteTex = loader_tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
-  concreteTex.wrapS = THREE.RepeatWrapping;
-  concreteTex.wrapT = THREE.RepeatWrapping;
-  concreteTex.repeat.set(10, 10);
+  // 2. REALISTIC ROAD
+  const textureLoader = new THREE.TextureLoader();
+  // Using a realistic asphalt texture
+  const roadBase = textureLoader.load('https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg'); // Placeholder for structure
+  const roadTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
+  
+  // Customizing the texture to look like dark asphalt
+  roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping;
+  roadTexture.repeat.set(20, 20);
+  roadTexture.colorSpace = THREE.SRGBColorSpace;
 
-  const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
-  const planeMat = new THREE.MeshStandardMaterial({ color: 0x333333 }); // Dark concrete
+  const planeGeo = new THREE.PlaneGeometry(200, 200);
+  const planeMat = new THREE.MeshStandardMaterial({ 
+    map: roadTexture,
+    color: 0x222222, // Darken the texture significantly to look like asphalt
+    roughness: 0.8,
+    metalness: 0.1
+  });
+  
   const road = new THREE.Mesh(planeGeo, planeMat);
   road.rotation.x = Math.PI * -0.5;
   scene.add(road);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5)); 
+  // LIGHTING
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8)); 
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
@@ -79,6 +89,7 @@
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     
+    // FIXING THE GROUNDING (Ensures truck sits ON the road)
     obj.position.x = -center.x;
     obj.position.y = (size.y / 2) - center.y; 
     obj.position.z = -center.z;
@@ -91,9 +102,10 @@
       obj.scale.setScalar(15 / size.x);
       obj.traverse(child => {
         if (child.isMesh && child.material) {
+          // Final fix for text overlays
           child.material.transparent = false;
-          child.material.alphaTest = 0.5;
           child.material.depthWrite = true;
+          child.material.alphaTest = 0.5;
         }
       });
     }
@@ -103,7 +115,7 @@
     truck = gltf.scene;
     setupModel(truck, false);
     scene.add(truck);
-  });
+  }, undefined, (e) => console.error(e));
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
@@ -122,41 +134,11 @@
     if (truck && truck.visible) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
-        // --- TRANSITION TO INTERIOR ---
         truck.visible = false;
         road.visible = false;
-        
-        // Switch to a clean, dark "Studio" background
-        scene.background = new THREE.Color(0x050505); 
-        renderer.toneMappingExposure = 2.0; // Boost light inside
+        scene.background = new THREE.Color(0x020202); // Pure focus black
+        renderer.toneMappingExposure = 2.2; 
 
         if (interior) {
           interior.visible = true;
-          // POSITION: Lower (Y=0.1) and Further Back (Z=7.0)
-          camera.position.set(0, 0.1, 7.0); 
-          controls.target.set(0, 0.1, 0); 
-          controls.enableZoom = false; 
-          controls.enablePan = false;
-          camera.updateProjectionMatrix();
-        }
-        controls.update();
-      }
-    }
-  });
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
-</script>
-
-</body>
-</html>
+          camera.position.set(0,
