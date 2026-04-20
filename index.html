@@ -27,22 +27,18 @@
   import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
-
-  // 1. CAMERA & RENDERER (Far plane set to 10000 for infinite view)
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = true; // IMPORTANT FOR REALISM
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(20, 10, 20);
+  camera.position.set(30, 15, 50); // Set camera further back for the larger truck
   controls.enableDamping = true;
 
-  // 2. RESTORE CITY ENVIRONMENT (HDRI)
+  // 1. HDRI BACKGROUND
   new RGBELoader()
     .setPath('https://threejs.org/examples/textures/equirectangular/')
     .load('venice_sunset_1k.hdr', function (texture) {
@@ -51,72 +47,90 @@
       scene.environment = texture;
     });
 
-  // 3. ASPHALT ROAD (Infinite and Textured)
-  const texLoader = new THREE.TextureLoader();
-  // Using a detailed asphalt-like texture
-  const roadBase = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
-  roadBase.wrapS = roadBase.wrapT = THREE.RepeatWrapping;
-  roadBase.repeat.set(200, 200); 
-  roadBase.anisotropy = 16;
+  // 2. LIGHTING
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  sun.position.set(10, 50, 10);
+  scene.add(sun);
 
-  const roadGeo = new THREE.PlaneGeometry(5000, 5000); 
+  // 3. MASSIVE ASPHALT ROAD
+  const texLoader = new THREE.TextureLoader();
+  const asphaltTex = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+  asphaltTex.wrapS = asphaltTex.wrapT = THREE.RepeatWrapping;
+  asphaltTex.repeat.set(800, 800); 
+
+  const roadGeo = new THREE.PlaneGeometry(5000, 5000);
   const roadMat = new THREE.MeshStandardMaterial({ 
-    map: roadBase, 
-    color: 0x151515, // Darken the texture to look like asphalt
-    roughness: 0.8
+    map: asphaltTex, 
+    color: 0x111111,
+    roughness: 0.9
   });
-  
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   
-  // ADJUST FLOOR LEVEL MANUALLY HERE
-  road.position.y = -3; 
-  
-  road.receiveShadow = true; // Allow truck to cast shadow on road
+  // FIXED HEIGHT: Lowered to ground level so it doesn't float in the sky
+  road.position.y = -5.0; 
   scene.add(road);
 
-  // 4. LIGHTING
-  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambient);
-
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.set(20, 50, 20);
-  sun.castShadow = true;
-  // Shadow camera setup for large areas
-  sun.shadow.camera.left = -50;
-  sun.shadow.camera.right = 50;
-  sun.shadow.camera.top = 50;
-  sun.shadow.camera.bottom = -50;
-  scene.add(sun);
-
-  // 5. LOADERS
+  // 4. LOADERS
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
   const loader = new GLTFLoader();
   loader.setDRACOLoader(dracoLoader);
 
-  let truck;
+  let truck, interior;
+
+  // TRUCK LOAD
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
-    
-    // Position Truck
     const box = new THREE.Box3().setFromObject(truck);
     const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Scale Up: Changed from 15 to 40
+    truck.scale.setScalar(40 / size.x);
+    
+    // Position truck so tires touch the road at Y = -5.0
     truck.position.x = -center.x;
     truck.position.z = -center.z;
-    truck.position.y = 0; 
+    truck.position.y = -5.0; 
 
-    truck.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true; 
-        child.receiveShadow = true;
-      }
-    });
-    
     scene.add(truck);
   });
 
-  // ANIMATION
+  // INTERIOR LOAD
+  loader.load('./interior.glb', (gltf) => {
+    interior = gltf.scene;
+    interior.visible = false;
+    scene.add(interior);
+  });
+
+  // 5. CLICK INTERACTION
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  window.addEventListener('click', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    if (truck && truck.visible) {
+      const intersects = raycaster.intersectObjects(truck.children, true);
+      if (intersects.length > 0) {
+        // Transition
+        truck.visible = false;
+        road.visible = false;
+        scene.background = new THREE.Color(0x050505);
+        
+        if (interior) {
+          interior.visible = true;
+          camera.position.set(0, 0, 5);
+          controls.target.set(0, 0, 0);
+        }
+      }
+    }
+  });
+
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
