@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Truck Exam Center</title>
   <style>
-    body { margin: 0; overflow: hidden; background-color: #000; }
+    body { margin: 0; overflow: hidden; background-color: #eeeeee; }
   </style>
 </head>
 <body>
@@ -20,16 +20,16 @@
 </script>
 
 <script type="module">
-  // Now you can use clean names!
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  // 1. Import the DRACOLoader
+  import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xeeeeee);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -38,50 +38,43 @@
   camera.position.set(5, 3, 8);
   controls.update();
 
-  // LIGHT
   const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
   scene.add(light);
 
-  // LOADER
+  // 2. Setup DRACOLoader
+  const dracoLoader = new DRACOLoader();
+  // We point it to the decoder files hosted on a CDN
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+
+  // 3. Link DRACOLoader to GLTFLoader
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
 
   let truck, interior;
 
-  // LOAD TRUCK
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
     scene.add(truck);
-  }, undefined, (error) => {
-    console.error('Error loading truck:', error);
-  });
+  }, undefined, (err) => console.error('Truck Load Error:', err));
 
-  // LOAD INTERIOR (HIDDEN)
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     interior.visible = false;
     scene.add(interior);
-  }, undefined, (error) => {
-    console.error('Error loading interior:', error);
-  });
+  }, undefined, (err) => console.error('Interior Load Error:', err));
 
-  // CLICK DETECTION
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
   window.addEventListener('click', (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
     raycaster.setFromCamera(mouse, camera);
 
     if (truck) {
       const intersects = raycaster.intersectObject(truck, true);
-
       if (intersects.length > 0) {
-        // SHOW INTERIOR
         if (interior) interior.visible = true;
-
-        // MOVE CAMERA INSIDE
         camera.position.set(0, 2, 2);
         controls.target.set(0, 1, 0);
         controls.update();
@@ -89,17 +82,15 @@
     }
   });
 
-  // RESIZE FIX
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // ANIMATION LOOP
   function animate() {
     requestAnimationFrame(animate);
-    controls.update(); // Recommended if using OrbitControls
+    controls.update();
     renderer.render(scene, camera);
   }
   animate();
