@@ -23,30 +23,40 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  // 1. Import the DRACOLoader
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xeeeeee);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // FIX DARKNESS: Set color space and tone mapping
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2; // Increase this if it's still too dark
+  
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(5, 3, 8);
   controls.update();
 
-  const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-  scene.add(light);
+  // LIGHTING FIX
+  // 1. Ambient Light: Brightens everything equally so nothing is pitch black
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); 
+  scene.add(ambientLight);
 
-  // 2. Setup DRACOLoader
+  // 2. Directional Light: Acts like the sun to show form and highlights
+  const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+  sunLight.position.set(5, 10, 7.5);
+  scene.add(sunLight);
+
   const dracoLoader = new DRACOLoader();
-  // We point it to the decoder files hosted on a CDN
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
 
-  // 3. Link DRACOLoader to GLTFLoader
   const loader = new GLTFLoader();
   loader.setDRACOLoader(dracoLoader);
 
@@ -55,13 +65,13 @@
   loader.load('./truck.glb', (gltf) => {
     truck = gltf.scene;
     scene.add(truck);
-  }, undefined, (err) => console.error('Truck Load Error:', err));
+  });
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
     interior.visible = false;
     scene.add(interior);
-  }, undefined, (err) => console.error('Interior Load Error:', err));
+  });
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -74,9 +84,15 @@
     if (truck) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
-        if (interior) interior.visible = true;
-        camera.position.set(0, 2, 2);
-        controls.target.set(0, 1, 0);
+        // FIX OVERLAP: Hide the exterior truck when looking at the interior
+        truck.visible = false; 
+        
+        if (interior) {
+          interior.visible = true;
+          // Position the camera exactly where your interior model sits
+          camera.position.set(0, 1.5, 0.5); 
+          controls.target.set(0, 1.5, 2); 
+        }
         controls.update();
       }
     }
