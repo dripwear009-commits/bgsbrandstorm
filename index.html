@@ -41,7 +41,7 @@
   camera.position.set(12, 6, 12);
   controls.enableDamping = true;
 
-  // REVERTED LIGHTING: High intensity ambient to lift interior shadows
+  // LIGHTING
   scene.add(new THREE.AmbientLight(0xffffff, 3.5)); 
   const topLight = new THREE.DirectionalLight(0xffffff, 2);
   topLight.position.set(5, 20, 5);
@@ -65,10 +65,19 @@
       const scaleFactor = 10 / size.x; 
       obj.scale.setScalar(scaleFactor);
       obj.rotation.y = Math.PI; 
-      // DoubleSide removed to fix text overlay/black artifacts
     } else {
       const scaleFactor = 15 / size.x;
       obj.scale.setScalar(scaleFactor);
+
+      // FIX FOR BLACK OVERLAY ON TEXT/DECALS
+      obj.traverse(child => {
+        if (child.isMesh && child.material) {
+          // If the material has transparency, we stop it from "blocking" the truck body
+          if (child.material.transparent || child.material.alphaTest > 0) {
+            child.material.depthWrite = false;
+          }
+        }
+      });
     }
   }
 
@@ -100,11 +109,11 @@
         if (interior) {
           interior.visible = true;
 
-          // CAMERA ADJUSTMENT:
-          // Y = 0.8 (Lower/Downwards)
-          // Z = 4.5 (Further Backwards)
-          camera.position.set(0, 0.8, 4.5); 
-          controls.target.set(0, 0.8, 0); 
+          // POSITION ADJUSTMENTS
+          // Y = 0.5 (Further down)
+          // Z = 5.5 (Further back/more zoom out)
+          camera.position.set(0, 0.5, 5.5); 
+          controls.target.set(0, 0.5, 0); 
           
           controls.enableZoom = false; 
           controls.enablePan = false;
