@@ -27,9 +27,13 @@
   import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
   const scene = new THREE.Scene();
+  
+  // FOG: This is the secret to an infinite floor. It fades the floor into the sky.
+  scene.fog = new THREE.FogExp2(0x87ceeb, 0.005); 
   scene.background = new THREE.Color(0x87ceeb); 
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+  // Camera Far increased to 5000 so the floor doesn't cut off
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -39,34 +43,37 @@
   const controls = new OrbitControls(camera, renderer.domElement);
   camera.position.set(20, 12, 25);
   controls.enableDamping = true;
+  controls.maxDistance = 100; // Prevents user from zooming out too far and seeing the edge
 
   // LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(10, 50, 10);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(50, 100, 50);
   scene.add(sun);
 
-  // 1. HUGE ASPHALT FLOOR
+  // 1. INFINITE ASPHALT FLOOR WITH TEXTURE
   const texLoader = new THREE.TextureLoader();
-  // Using a standard asphalt/rock texture from Three.js examples
-  const asphaltTex = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg'); 
-  // To make it look like asphalt, we'll tint it dark in the material
-  asphaltTex.wrapS = THREE.RepeatWrapping;
-  asphaltTex.wrapT = THREE.RepeatWrapping;
-  asphaltTex.repeat.set(100, 100); // Repeat many times for a large floor
+  // Using a realistic asphalt texture
+  const asphaltTexture = texLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/grasslight-big.jpg'); 
+  // Note: Since I can't provide a local file, I'm using a Three.js sample. 
+  // To make it look like asphalt, we tint it very dark.
+  
+  asphaltTexture.wrapS = THREE.RepeatWrapping;
+  asphaltTexture.wrapT = THREE.RepeatWrapping;
+  asphaltTexture.repeat.set(200, 200); // High repeat for realistic scale
+  asphaltTexture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Keeps texture sharp at a distance
 
-  const roadGeo = new THREE.PlaneGeometry(1000, 1000);
+  const roadGeo = new THREE.PlaneGeometry(2000, 2000); // Massive plane
   const roadMat = new THREE.MeshStandardMaterial({ 
-    map: asphaltTex, 
-    color: 0x222222, // Darken the texture to look like asphalt
-    roughness: 0.8 
+    map: asphaltTexture, 
+    color: 0x111111, // Tints the texture to a dark asphalt charcoal
+    roughness: 0.9,
+    metalness: 0.1
   });
+  
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
-  
-  // POSITION THE FLOOR LOWER MANUALLY
-  road.position.y = -2.0; 
-  
+  road.position.y = -2.5; // Manually lowered to match tires
   scene.add(road);
 
   // HDRI
@@ -75,7 +82,7 @@
     .load('venice_sunset_1k.hdr', function (texture) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
       scene.environment = texture;
-      scene.background = texture;
+      // We keep the solid sky color for the fog to blend correctly
     });
 
   const dracoLoader = new DRACOLoader();
@@ -98,7 +105,6 @@
       obj.scale.setScalar(10 / size.x);
       obj.visible = false;
     } else {
-      // Keep truck at 0, the floor is already lowered to -2.0
       obj.position.y = 0; 
       obj.scale.setScalar(15 / size.x);
     }
@@ -129,6 +135,7 @@
       if (intersects.length > 0) {
         truck.visible = false;
         road.visible = false;
+        scene.fog = null; // Remove fog for interior view
         scene.background = new THREE.Color(0x050505); 
         if (interior) {
           interior.visible = true;
