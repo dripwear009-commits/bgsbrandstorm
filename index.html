@@ -63,9 +63,7 @@ new RGBELoader()
 
   const road = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), roadMat);
   road.rotation.x = -Math.PI / 2;
-  const GROUND_Y = -18.0; 
-  road.position.y = GROUND_Y;
-  scene.add(road);
+
   // MASTER HEIGHT CONTROL - Lowered further to match background horizon
   const GROUND_Y = -20.0; 
   road.position.y = GROUND_Y;
