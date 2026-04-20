@@ -34,7 +34,7 @@
   document.body.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(0, 5, 60); 
+  camera.position.set(0, 5, 50); 
   controls.enableDamping = true;
 
   // 1. HDRI BACKGROUND
@@ -46,33 +46,29 @@
       scene.environment = texture;
     });
 
-  // 2. LIGHTING
-  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-
-  // 3. ASPHALT ROAD
+  // 2. THE ROAD
   const texLoader = new THREE.TextureLoader();
-  // Using a clear asphalt/concrete texture
-  const roadTex = texLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg', (txt) => {
-      txt.needsUpdate = true;
+  
+  // CHANGE 'asphalt.jpg' TO YOUR FILENAME
+  const roadTex = texLoader.load('asphalt.jpg', (txt) => {
+      txt.wrapS = txt.wrapT = THREE.RepeatWrapping;
+      txt.repeat.set(100, 100); 
   });
-  roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
-  roadTex.repeat.set(500, 500); 
 
   const roadGeo = new THREE.PlaneGeometry(5000, 5000);
-  const roadMat = new THREE.MeshPhongMaterial({ 
+  const roadMat = new THREE.MeshStandardMaterial({ 
     map: roadTex, 
-    color: 0x222222 // Dark charcoal
+    color: 0x444444 // Use 0xffffff if your image is already dark
   });
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.rotation.x = -Math.PI / 2;
   
-  // --- FLOOR HEIGHT ADJUSTMENT ---
-  // If truck/road are still too high, make this number more negative (e.g., -20.0)
-  const GROUND_Y = -12.0; 
+  // LOWERED THE GROUND SIGNIFICANTLY
+  const GROUND_Y = -18.0; 
   road.position.y = GROUND_Y;
   scene.add(road);
 
-  // 4. TRUCK LOAD
+  // 3. LOADERS
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
   const loader = new GLTFLoader();
@@ -86,42 +82,49 @@
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
 
-    // Scale up
-    truck.scale.setScalar(50 / size.x);
-    
-    // Position truck horizontally and lock to road height
-    truck.position.x = -center.x;
-    truck.position.z = -center.z;
-    truck.position.y = GROUND_Y; 
-
+    truck.scale.setScalar(60 / size.x); // Made truck even larger
+    truck.position.set(-center.x, GROUND_Y, -center.z); 
     scene.add(truck);
   });
 
   loader.load('./interior.glb', (gltf) => {
     interior = gltf.scene;
+    const box = new THREE.Box3().setFromObject(interior);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    
+    interior.scale.setScalar(10 / size.x);
+    interior.position.set(-center.x, 0, -center.z);
     interior.visible = false;
     scene.add(interior);
   });
 
-  // 5. CLICK HANDLER
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-
+  // 4. CLICK & INTERIOR LOGIC
   window.addEventListener('mousedown', (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const mouse = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
 
     if (truck && truck.visible) {
       const intersects = raycaster.intersectObject(truck, true);
       if (intersects.length > 0) {
+        // Hide exterior
         truck.visible = false;
         road.visible = false;
-        scene.background = new THREE.Color(0x000000);
+        scene.background = new THREE.Color(0x050505);
+
         if (interior) {
           interior.visible = true;
-          camera.position.set(0, 0, 5);
-          controls.target.set(0, 0, 0);
+          // Reset Camera for Interior
+          camera.position.set(0, 0.5, 2); // Tight zoom for interior
+          controls.target.set(0, 0.5, 0);
+          controls.enableZoom = false; // Disable zoom as requested
+          controls.minDistance = 0.1;
+          controls.maxDistance = 5;
+          controls.update();
         }
       }
     }
